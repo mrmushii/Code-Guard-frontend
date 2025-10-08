@@ -2,6 +2,7 @@ import React, { useEffect, useRef, useState } from "react";
 import { useParams } from "react-router-dom";
 import io, { Socket } from "socket.io-client";
 import Peer from "simple-peer";
+
 import { Button } from "@/components/ui/button";
 import {
   Users,
@@ -18,6 +19,27 @@ interface PeerState {
   peer: Peer.Instance;
   stream?: MediaStream;
 }
+
+const iceServers: RTCIceServer[] = [
+  { urls: "stun:stun.l.google.com:19302" },
+  { urls: "stun:stun1.l.google.com:19302" },
+  { urls: "stun:stun2.l.google.com:19302" },
+  { urls: "stun:stun3.l.google.com:19302" },
+  {
+    urls: [
+      "turn:openrelay.metered.ca:443?transport=tcp",
+      "turn:openrelay.metered.ca:443?transport=udp",
+    ],
+    username: "openrelayproject",
+    credential: "openrelayproject",
+  },
+  {
+    urls: ["turn:relay.backupserver.com:443?transport=tcp"],
+    username: "backupuser",
+    credential: "backuppass",
+  },
+];
+
 
 const MonitoringDashboardPage: React.FC = () => {
   const { roomId } = useParams<{ roomId: string }>();
@@ -55,15 +77,7 @@ const MonitoringDashboardPage: React.FC = () => {
   trickle: true,   // incremental ICE candidates
   stream: stream,  // attach local media
   config: {
-    iceServers: [
-      { urls: "stun:stun.l.google.com:19302" },
-      { urls: "stun:stun1.l.google.com:19302" },
-      {
-        urls: "turn:relay1.expressturn.com:3478",
-        username: "efhH6ACzq2nlK4m7",
-        credential: "7iB1xZKibd9xJwEt",
-      },
-    ],
+    iceServers: iceServers
   },
 });
 
