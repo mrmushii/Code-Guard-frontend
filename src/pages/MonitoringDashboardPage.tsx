@@ -2,7 +2,6 @@ import React, { useEffect, useRef, useState } from "react";
 import { useParams } from "react-router-dom";
 import io, { Socket } from "socket.io-client";
 import Peer from "simple-peer";
-
 import { Button } from "@/components/ui/button";
 import {
   Users,
@@ -20,25 +19,6 @@ interface PeerState {
   stream?: MediaStream;
 }
 
-const iceServers: RTCIceServer[] = [
-  { urls: "stun:stun.l.google.com:19302" },
-  { urls: "stun:stun1.l.google.com:19302" },
-  { urls: "stun:stun2.l.google.com:19302" },
-  { urls: "stun:stun3.l.google.com:19302" },
-  {
-    urls: [
-      "turn:openrelay.metered.ca:443?transport=tcp",
-      "turn:openrelay.metered.ca:443?transport=udp",
-    ],
-    username: "openrelayproject",
-    credential: "openrelayproject",
-  },
-  {
-    urls: ["turn:relay.backupserver.com:443?transport=tcp"],
-    username: "backupuser",
-    credential: "backuppass",
-  },
-];
 
 
 const MonitoringDashboardPage: React.FC = () => {
@@ -73,22 +53,40 @@ const MonitoringDashboardPage: React.FC = () => {
 
           // --- Create Peer with STUN/TURN ---
           const peer = new Peer({
-  initiator: true, // examiner is initiator
-  trickle: true,   // incremental ICE candidates
-  stream: stream,  // attach local media
-  config: {
-    iceServers: iceServers
-  },
-});
+            initiator: true, // examiner is initiator
+            trickle: true, // incremental ICE candidates
+            stream: stream, // attach local media
+            config: {
+              iceServers: [
+                { urls: ["stun:bn-turn2.xirsys.com"] },
+                {
+                  username:
+                    "J4u6YIUf1k35iq4q0pS1BfFWOC4UUQy25eT5ZsDsWdETzfXFw0TYZL4etEHu7VrnAAAAAGjmYQ5NdXNoZmlx",
+                  credential: "2403ae1a-a447-11f0-9415-0242ac140004",
+                  urls: [
+                    "turn:bn-turn2.xirsys.com:80?transport=udp",
+                    "turn:bn-turn2.xirsys.com:3478?transport=udp",
+                    "turn:bn-turn2.xirsys.com:80?transport=tcp",
+                    "turn:bn-turn2.xirsys.com:3478?transport=tcp",
+                    "turns:bn-turn2.xirsys.com:443?transport=tcp",
+                    "turns:bn-turn2.xirsys.com:5349?transport=tcp",
+                  ],
+                },
+              ],
+            },
+          });
 
-// --- Log ICE connection state for debugging ---
-peer.on("iceConnectionStateChange", () => {
-  console.log(`ICE state for ${payload.studentId}:`, (peer as any)._pc.iceConnectionState);
-});
+          // --- Log ICE connection state for debugging ---
+          peer.on("iceConnectionStateChange", () => {
+            console.log(
+              `ICE state for ${payload.studentId}:`,
+              (peer as any)._pc.iceConnectionState
+            );
+          });
 
-peer.on("iceCandidate", (candidate) => {
-  console.log(`ICE candidate for ${payload.studentId}:`, candidate);
-});
+          peer.on("iceCandidate", (candidate) => {
+            console.log(`ICE candidate for ${payload.studentId}:`, candidate);
+          });
 
           // --- Signal handling ---
           peer.on("signal", (signalData) => {
@@ -121,7 +119,10 @@ peer.on("iceCandidate", (candidate) => {
         socketRef.current.on("student-joined", handleStudentJoined);
 
         // --- Receive signals from students ---
-        const handleReceiveSignal = (payload: { signal: Peer.SignalData; from: string }) => {
+        const handleReceiveSignal = (payload: {
+          signal: Peer.SignalData;
+          from: string;
+        }) => {
           const item = peersRef.current.find((p) => p.peerId === payload.from);
           if (item && item.peer) {
             console.log(`📩 Received signal from ${payload.from}`);
@@ -135,12 +136,13 @@ peer.on("iceCandidate", (candidate) => {
           console.log(`❌ Student ${studentId} left.`);
           const item = peersRef.current.find((p) => p.peerId === studentId);
           item?.peer.destroy();
-          const newPeers = peersRef.current.filter((p) => p.peerId !== studentId);
+          const newPeers = peersRef.current.filter(
+            (p) => p.peerId !== studentId
+          );
           peersRef.current = newPeers;
           setPeers(newPeers);
         };
         socketRef.current.on("student-left", handleStudentLeft);
-
       } catch (err) {
         console.error("Error getting media:", err);
       }
@@ -169,12 +171,17 @@ peer.on("iceCandidate", (candidate) => {
         </div>
         <div className="flex items-center space-x-4">
           <span className="flex items-center text-sm text-green-600">
-            <div className="w-2 h-2 bg-green-500 rounded-full mr-2"></div>System Active
+            <div className="w-2 h-2 bg-green-500 rounded-full mr-2"></div>System
+            Active
           </span>
-          <Button className="bg-green-600 hover:bg-green-700">Start Exam Session</Button>
+          <Button className="bg-green-600 hover:bg-green-700">
+            Start Exam Session
+          </Button>
           <Button variant="destructive">End Session</Button>
           <div className="text-right">
-            <p className="font-mono text-lg">{new Date().toLocaleTimeString("en-GB")}</p>
+            <p className="font-mono text-lg">
+              {new Date().toLocaleTimeString("en-GB")}
+            </p>
             <p className="text-xs text-gray-500">Session Time</p>
           </div>
         </div>
@@ -228,7 +235,9 @@ peer.on("iceCandidate", (candidate) => {
         {/* Student video grid */}
         <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6">
           {peers.map((p) =>
-            p.stream ? <StudentVideo key={p.peerId} peer={p.peer} stream={p.stream} /> : null
+            p.stream ? (
+              <StudentVideo key={p.peerId} peer={p.peer} stream={p.stream} />
+            ) : null
           )}
         </div>
       </main>
@@ -254,7 +263,11 @@ const StatCard = ({
     <div>
       <p className="text-sm text-gray-500">{title}</p>
       <p className="text-3xl font-bold">{value}</p>
-      <p className={`text-xs ${requiresAttention ? "text-red-500" : "text-gray-400"}`}>
+      <p
+        className={`text-xs ${
+          requiresAttention ? "text-red-500" : "text-gray-400"
+        }`}
+      >
         {footer}
       </p>
     </div>
