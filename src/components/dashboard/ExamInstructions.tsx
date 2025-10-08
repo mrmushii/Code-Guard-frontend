@@ -88,7 +88,7 @@ export function ExamInstructions({
           if (!peerRef.current) {
             const peer = new Peer({
               initiator: false, // student is not initiator
-              trickle: false,
+              trickle: true,
               stream: streamRef.current!, // attach local display stream
               config: {
                 iceServers: [

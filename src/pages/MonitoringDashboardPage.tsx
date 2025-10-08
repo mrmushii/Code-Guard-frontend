@@ -52,7 +52,7 @@ const MonitoringDashboardPage: React.FC = () => {
           // --- Create Peer with STUN/TURN ---
           const peer = new Peer({
             initiator: true, // examiner is initiator
-            trickle: false,
+            trickle: true,
             stream: stream, // attach local media
             config: {
               iceServers: [
