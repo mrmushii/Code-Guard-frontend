@@ -32,8 +32,8 @@ const MonitoringDashboardPage: React.FC = () => {
       try {
         // --- Get local media stream ---
         const stream = await navigator.mediaDevices.getUserMedia({
-          video: true,
-          audio: true,
+          video: false,
+          audio: false,
         });
 
         // --- Connect to socket ---
