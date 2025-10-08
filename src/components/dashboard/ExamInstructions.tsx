@@ -88,7 +88,7 @@ export function ExamInstructions({
           if (!peerRef.current) {
             const peer = new Peer({
               initiator: false, // student is not initiator
-              trickle: true,
+              trickle: true,    // allow incremental ICE candidates
               stream: streamRef.current!, // attach local display stream
               config: {
                 iceServers: [
@@ -110,6 +110,18 @@ export function ExamInstructions({
                 signal: signalData,
                 to: payload.from,
               });
+            });
+
+            // Log ICE connection states for debugging
+            peer.on("iceConnectionStateChange", () => {
+              console.log(
+                "ICE state on student side:",
+                (peer as any)._pc.iceConnectionState
+              );
+            });
+
+            peer.on("iceCandidate", (candidate) => {
+              console.log("ICE candidate on student side:", candidate);
             });
 
             peer.on("error", (err) => {

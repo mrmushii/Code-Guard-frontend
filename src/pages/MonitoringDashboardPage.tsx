@@ -51,21 +51,30 @@ const MonitoringDashboardPage: React.FC = () => {
 
           // --- Create Peer with STUN/TURN ---
           const peer = new Peer({
-            initiator: true, // examiner is initiator
-            trickle: true,
-            stream: stream, // attach local media
-            config: {
-              iceServers: [
-                { urls: "stun:stun.l.google.com:19302" },
-                { urls: "stun:stun1.l.google.com:19302" },
-                {
-                  urls: "turn:relay1.expressturn.com:3478",
-                  username: "efhH6ACzq2nlK4m7",
-                  credential: "7iB1xZKibd9xJwEt",
-                },
-              ],
-            },
-          });
+  initiator: true, // examiner is initiator
+  trickle: true,   // incremental ICE candidates
+  stream: stream,  // attach local media
+  config: {
+    iceServers: [
+      { urls: "stun:stun.l.google.com:19302" },
+      { urls: "stun:stun1.l.google.com:19302" },
+      {
+        urls: "turn:relay1.expressturn.com:3478",
+        username: "efhH6ACzq2nlK4m7",
+        credential: "7iB1xZKibd9xJwEt",
+      },
+    ],
+  },
+});
+
+// --- Log ICE connection state for debugging ---
+peer.on("iceConnectionStateChange", () => {
+  console.log(`ICE state for ${payload.studentId}:`, (peer as any)._pc.iceConnectionState);
+});
+
+peer.on("iceCandidate", (candidate) => {
+  console.log(`ICE candidate for ${payload.studentId}:`, candidate);
+});
 
           // --- Signal handling ---
           peer.on("signal", (signalData) => {
