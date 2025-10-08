@@ -32,7 +32,7 @@ const MonitoringDashboardPage: React.FC = () => {
       try {
         // --- Get local media stream ---
         const stream = await navigator.mediaDevices.getUserMedia({
-          video: false,
+          video: true,
           audio: false,
         });
 
