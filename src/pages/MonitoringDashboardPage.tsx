@@ -28,75 +28,103 @@ const MonitoringDashboardPage: React.FC = () => {
   useEffect(() => {
     if (!roomId || typeof window === "undefined") return;
 
-    // connect socket
-    socketRef.current = io("code-guard-backend-production.up.railway.app");
-    socketRef.current.emit("examiner-join-room", { roomId });
-
-    // handle new student
-    const handleStudentJoined = (payload: { studentId: string }) => {
-      console.log(`👩‍🎓 Student ${payload.studentId} joined.`);
-
-      if (!window.RTCPeerConnection) {
-        console.error("WebRTC not supported in this environment");
-        return;
-      }
-
-      // create peer
-      const peer = new Peer({ initiator: true, trickle: false });
-
-      peer.on("signal", (signalData) => {
-        console.log(`📡 Sending signal to ${payload.studentId}`);
-        socketRef.current?.emit("send-signal", {
-          to: payload.studentId,
-          signal: signalData,
+    const init = async () => {
+      try {
+        // --- Get local media stream ---
+        const stream = await navigator.mediaDevices.getUserMedia({
+          video: true,
+          audio: true,
         });
-      });
 
-      peer.on("stream", (remoteStream) => {
-        console.log(`📺 Received stream from ${payload.studentId}`);
-        const peerState = peersRef.current.find(
-          (p) => p.peerId === payload.studentId
-        );
-        if (peerState) {
-          peerState.stream = remoteStream;
+        // --- Connect to socket ---
+        socketRef.current = io("code-guard-backend-production.up.railway.app");
+        socketRef.current.emit("examiner-join-room", { roomId });
+
+        // --- Handle new student joining ---
+        const handleStudentJoined = (payload: { studentId: string }) => {
+          console.log(`👩‍🎓 Student ${payload.studentId} joined.`);
+
+          if (!window.RTCPeerConnection) {
+            console.error("WebRTC not supported in this environment");
+            return;
+          }
+
+          // --- Create Peer with STUN/TURN ---
+          const peer = new Peer({
+            initiator: true, // examiner is initiator
+            trickle: false,
+            stream: stream, // attach local media
+            config: {
+              iceServers: [
+                { urls: "stun:stun.l.google.com:19302" },
+                { urls: "stun:stun1.l.google.com:19302" },
+                {
+                  urls: "turn:relay1.expressturn.com:3478",
+                  username: "efhH6ACzq2nlK4m7",
+                  credential: "7iB1xZKibd9xJwEt",
+                },
+              ],
+            },
+          });
+
+          // --- Signal handling ---
+          peer.on("signal", (signalData) => {
+            console.log(`📡 Sending signal to ${payload.studentId}`);
+            socketRef.current?.emit("send-signal", {
+              to: payload.studentId,
+              signal: signalData,
+            });
+          });
+
+          // --- Receive remote stream ---
+          peer.on("stream", (remoteStream) => {
+            console.log(`📺 Received stream from ${payload.studentId}`);
+            const peerState = peersRef.current.find(
+              (p) => p.peerId === payload.studentId
+            );
+            if (peerState) {
+              peerState.stream = remoteStream;
+              setPeers([...peersRef.current]);
+            }
+          });
+
+          peer.on("error", (err) => console.error("Peer error:", err));
+
+          const newPeer: PeerState = { peerId: payload.studentId, peer };
+          peersRef.current.push(newPeer);
           setPeers([...peersRef.current]);
-        }
-      });
+        };
 
-      peer.on("error", (err) => console.error("Peer error:", err));
+        socketRef.current.on("student-joined", handleStudentJoined);
 
-      const newPeer: PeerState = { peerId: payload.studentId, peer };
-      peersRef.current.push(newPeer);
-      setPeers([...peersRef.current]);
-    };
+        // --- Receive signals from students ---
+        const handleReceiveSignal = (payload: { signal: Peer.SignalData; from: string }) => {
+          const item = peersRef.current.find((p) => p.peerId === payload.from);
+          if (item && item.peer) {
+            console.log(`📩 Received signal from ${payload.from}`);
+            item.peer.signal(payload.signal);
+          }
+        };
+        socketRef.current.on("receive-signal", handleReceiveSignal);
 
-    socketRef.current.on("student-joined", handleStudentJoined);
+        // --- Handle student leaving ---
+        const handleStudentLeft = (studentId: string) => {
+          console.log(`❌ Student ${studentId} left.`);
+          const item = peersRef.current.find((p) => p.peerId === studentId);
+          item?.peer.destroy();
+          const newPeers = peersRef.current.filter((p) => p.peerId !== studentId);
+          peersRef.current = newPeers;
+          setPeers(newPeers);
+        };
+        socketRef.current.on("student-left", handleStudentLeft);
 
-    // receive signals from students
-    const handleReceiveSignal = (payload: {
-      signal: Peer.SignalData;
-      from: string;
-    }) => {
-      const item = peersRef.current.find((p) => p.peerId === payload.from);
-      if (item && item.peer) {
-        console.log(`📩 Received signal from ${payload.from}`);
-        item.peer.signal(payload.signal);
+      } catch (err) {
+        console.error("Error getting media:", err);
       }
     };
-    socketRef.current.on("receive-signal", handleReceiveSignal);
 
-    // handle student leaving
-    const handleStudentLeft = (studentId: string) => {
-      console.log(`❌ Student ${studentId} left.`);
-      const item = peersRef.current.find((p) => p.peerId === studentId);
-      item?.peer.destroy();
-      const newPeers = peersRef.current.filter((p) => p.peerId !== studentId);
-      peersRef.current = newPeers;
-      setPeers(newPeers);
-    };
-    socketRef.current.on("student-left", handleStudentLeft);
+    init();
 
-    // cleanup
     return () => {
       socketRef.current?.disconnect();
       peersRef.current.forEach((p) => p.peer.destroy());
@@ -118,17 +146,12 @@ const MonitoringDashboardPage: React.FC = () => {
         </div>
         <div className="flex items-center space-x-4">
           <span className="flex items-center text-sm text-green-600">
-            <div className="w-2 h-2 bg-green-500 rounded-full mr-2"></div>System
-            Active
+            <div className="w-2 h-2 bg-green-500 rounded-full mr-2"></div>System Active
           </span>
-          <Button className="bg-green-600 hover:bg-green-700">
-            Start Exam Session
-          </Button>
+          <Button className="bg-green-600 hover:bg-green-700">Start Exam Session</Button>
           <Button variant="destructive">End Session</Button>
           <div className="text-right">
-            <p className="font-mono text-lg">
-              {new Date().toLocaleTimeString("en-GB")}
-            </p>
+            <p className="font-mono text-lg">{new Date().toLocaleTimeString("en-GB")}</p>
             <p className="text-xs text-gray-500">Session Time</p>
           </div>
         </div>
@@ -182,9 +205,7 @@ const MonitoringDashboardPage: React.FC = () => {
         {/* Student video grid */}
         <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6">
           {peers.map((p) =>
-            p.stream ? (
-              <StudentVideo key={p.peerId} peer={p.peer} stream={p.stream} />
-            ) : null
+            p.stream ? <StudentVideo key={p.peerId} peer={p.peer} stream={p.stream} /> : null
           )}
         </div>
       </main>
@@ -210,11 +231,7 @@ const StatCard = ({
     <div>
       <p className="text-sm text-gray-500">{title}</p>
       <p className="text-3xl font-bold">{value}</p>
-      <p
-        className={`text-xs ${
-          requiresAttention ? "text-red-500" : "text-gray-400"
-        }`}
-      >
+      <p className={`text-xs ${requiresAttention ? "text-red-500" : "text-gray-400"}`}>
         {footer}
       </p>
     </div>

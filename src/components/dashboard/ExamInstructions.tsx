@@ -6,7 +6,6 @@ import { MonitorPlay } from "lucide-react";
 import io, { Socket } from "socket.io-client";
 import Peer from "simple-peer";
 
-
 interface ExamInstructionsProps {
   courseName: string;
   durationMinutes: number;
@@ -25,24 +24,23 @@ export function ExamInstructions({
   courseName,
   durationMinutes,
   roomId,
-  
 }: ExamInstructionsProps) {
   const [isSharing, setIsSharing] = useState(false);
   const [timeLeft, setTimeLeft] = useState(durationMinutes * 60);
-const [examStarted, setExamStarted] = useState(false);
+  const [examStarted, setExamStarted] = useState(false);
   const userVideoRef = useRef<HTMLVideoElement>(null);
   const socketRef = useRef<Socket | null>(null);
   const peerRef = useRef<Peer.Instance | null>(null);
   const streamRef = useRef<MediaStream | null>(null);
 
-  // countdown
+  // Countdown timer
   useEffect(() => {
     if (!isSharing || timeLeft <= 0) return;
     const timerId = setInterval(() => setTimeLeft((prev) => prev - 1), 1000);
     return () => clearInterval(timerId);
   }, [isSharing, timeLeft]);
 
-  // cleanup
+  // Cleanup on unmount
   useEffect(() => {
     return () => {
       console.log("Cleaning up connections...");
@@ -52,14 +50,15 @@ const [examStarted, setExamStarted] = useState(false);
     };
   }, []);
 
-const startExam = async () => {
+  const startExam = async () => {
     if (!roomId) return;
-    setIsSharing(true)
+    setIsSharing(true);
+
     try {
-      // ✅ get student's screen share
+      // ✅ Get student's screen share
       const stream = await navigator.mediaDevices.getDisplayMedia({
         video: true,
-        audio: false, // set true if you need mic audio
+        audio: false, // set true if mic audio is needed
       });
       streamRef.current = stream;
 
@@ -68,31 +67,43 @@ const startExam = async () => {
         console.log("   Track:", track.kind, "state:", track.readyState)
       );
 
-      // preview in student's own window
+      // Preview in student's own window
       if (userVideoRef.current) {
         userVideoRef.current.srcObject = stream;
       }
 
       setExamStarted(true);
 
-      // ✅ connect to signaling server
+      // ✅ Connect to signaling server
       socketRef.current = io("code-guard-backend-production.up.railway.app");
       socketRef.current.emit("student-join-room", roomId);
 
-      // ✅ handle examiner signal
+      // ✅ Handle examiner signal
       socketRef.current.on(
         "receive-signal",
         (payload: { signal: Peer.SignalData; from: string }) => {
           console.log("📩 Student received signal from examiner:", payload);
 
-          // only create peer once
+          // Only create peer once
           if (!peerRef.current) {
             const peer = new Peer({
-              initiator: false,
+              initiator: false, // student is not initiator
               trickle: false,
-              stream: streamRef.current!, 
+              stream: streamRef.current!, // attach local display stream
+              config: {
+                iceServers: [
+                  { urls: "stun:stun.l.google.com:19302" },
+                  { urls: "stun:stun1.l.google.com:19302" },
+                  {
+                    urls: "turn:relay1.expressturn.com:3478",
+                    username: "efhH6ACzq2nlK4m7",
+                    credential: "7iB1xZKibd9xJwEt",
+                  },
+                ],
+              },
             });
 
+            // Send back signal to examiner
             peer.on("signal", (signalData) => {
               console.log("📤 Student sending signal back:", signalData);
               socketRef.current?.emit("send-signal", {
@@ -108,7 +119,7 @@ const startExam = async () => {
             peerRef.current = peer;
           }
 
-          // always feed new signals to the peer
+          // Always feed new signals to the peer
           peerRef.current.signal(payload.signal);
         }
       );
@@ -137,7 +148,7 @@ const startExam = async () => {
       <CardContent className="px-10 pb-10">
         <div className="max-w-xl mx-auto space-y-8">
           <ol className="list-decimal list-inside space-y-3 text-lg text-gray-700">
-            <li>Ensure your coding environment (eg. VS Code ) is open.</li>
+            <li>Ensure your coding environment (eg. VS Code) is open.</li>
             <li>Click 'Start Exam' to begin sharing your entire screen.</li>
             <li>Do not close the browser window or navigate away.</li>
             <li>A countdown timer is visible on the examiner's screen.</li>
@@ -145,13 +156,13 @@ const startExam = async () => {
           <div className="flex justify-center items-center space-x-4 pt-4">
             {!examStarted && (
               <Button
-              onClick={startExam}
-              disabled={isSharing}
-              className="bg-[#1a0f3d] hover:bg-[#2e1d5a] text-white px-8 py-6 text-lg"
-            >
-              Start Exam & Share Screen
-            </Button>
-            ) }
+                onClick={startExam}
+                disabled={isSharing}
+                className="bg-[#1a0f3d] hover:bg-[#2e1d5a] text-white px-8 py-6 text-lg"
+              >
+                Start Exam & Share Screen
+              </Button>
+            )}
             <Button
               variant="outline"
               disabled
